@@ -1,17 +1,8 @@
-use serde::Deserialize;
+mod theme;
+
+use dotenv::dotenv;
+use newsapi::{get_articles, Data};
 use std::error::Error;
-
-#[derive(Deserialize, Debug)]
-struct Data {
-    articles: Vec<Article>,
-}
-
-#[derive(Deserialize, Debug)]
-struct Article {
-    title: String,
-    description: String,
-    url: String,
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("Hello, world!");
@@ -24,53 +15,26 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn print_articles(data: Data) -> () {
+    let theme = theme::default();
+    theme.print_text("Top headlines\n\n");
     for article in &data.articles {
-        println!("\n\n\n");
-        colour::dark_yellow!("> {}", article.title);
-        print!("\n");
-        colour::white!("  {}", article.description);
-        print!("\n\n");
-        colour::dark_green!("  {}", article.url);
+        theme.print_text(&format!("`{}`", article.title));
+        theme.print_text(&format!("> *{}*", article.url));
+        theme.print_text("---")
     }
 }
 
-fn get_articles(url: &String) -> Result<Data, Box<dyn Error>> {
-    let resp = ureq::get(url).call();
+fn get_api_key() -> Result<String, dotenv::Error> {
+    dotenv();
 
-    if resp.is_ok() {
-        let response = resp.unwrap().into_string();
-        if response.is_err() {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to convert response to string",
-            )));
-        }
+    let api_key = std::env::var("NEWS_API_KEY").unwrap_or("".to_string());
 
-        let articles = serde_json::from_str(&response.unwrap());
-
-        if articles.is_err() {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to parse response",
-            )));
-        }
-
-        return Ok(articles.unwrap());
-    } else {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to fetch data",
-        )));
-    }
-}
-
-fn get_api_key() -> String {
-    String::from("1bbbd9dd69564803a61305b23057397d")
+    Ok(api_key)
 }
 
 fn get_url() -> String {
-    format!(
-        "https://newsapi.org/v2/top-headlines?country=us&apiKey={}",
-        get_api_key()
-    )
+    let api_key = get_api_key().unwrap();
+    let url = "https://newsapi.org/v2/top-headlines?country=us&apiKey=";
+
+    format!("{}{}", url, api_key)
 }
