@@ -1,25 +1,12 @@
 use std::io;
 
+use reqwest;
 use serde::Deserialize;
 use thiserror::Error;
+use ureq;
 use url;
 
 const BASE_URL: &str = "https://newsapi.org/v2/";
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum NewsApiError {
@@ -35,6 +22,12 @@ pub enum NewsApiError {
     UrlPreparingFailed,
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Failed to make async request")]
+    #[cfg(feature = "async")]
+    AsyncRequestFailed(#[from] reqwest::Error),
+    #[error("Failed to make async request")]
+    #[cfg(not(feature = "async"))]
+    AsyncRequestFailed(#[from] reqwest::Error),
 }
 
 #[derive(Deserialize, Debug)]
@@ -46,6 +39,7 @@ pub struct NewsApiResponse {
 
 impl NewsApiResponse {
     pub fn get_articles(&self) -> &Vec<Article> {
+        dbg!(&self.articles);
         &self.articles
     }
 }
@@ -135,9 +129,33 @@ impl NewsApi {
         let req = ureq::get(&url).set("Authorization", &self.api_key);
         let resp: NewsApiResponse = req.call()?.into_json()?;
 
-        match resp.status.as_str() {
-            "ok" => return Ok(resp),
-            _ => return Err(self.map_response_err(resp.code)),
+        self.parse_resp(resp)
+    }
+
+    #[cfg(feature = "async")]
+    pub async fn fetch_async(&self) -> Result<NewsApiResponse, NewsApiError> {
+        let url = self.prepare_url()?;
+        let client = reqwest::Client::new();
+        let request = client
+            .request(reqwest::Method::GET, url)
+            .header("Authorization", &self.api_key)
+            .build()
+            .map_err(|e| NewsApiError::AsyncRequestFailed(e))?;
+
+        let response: NewsApiResponse = client
+            .execute(request)
+            .await?
+            .json()
+            .await
+            .map_err(|e| NewsApiError::AsyncRequestFailed(e))?;
+
+        self.parse_resp(response)
+    }
+
+    fn parse_resp(&self, response: NewsApiResponse) -> Result<NewsApiResponse, NewsApiError> {
+        match response.status.as_str() {
+            "ok" => return Ok(response),
+            _ => return Err(self.map_response_err(response.code)),
         }
     }
 
