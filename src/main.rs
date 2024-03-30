@@ -3,6 +3,7 @@ mod theme;
 use dotenv::dotenv;
 use newsapi::{Article, Country, Endpoint};
 use std::error::Error;
+use tokio;
 
 // fn main() -> Result<(), Box<dyn Error>> {
 //     let api_key = get_api_key()?;

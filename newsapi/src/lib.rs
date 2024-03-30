@@ -39,7 +39,6 @@ pub struct NewsApiResponse {
 
 impl NewsApiResponse {
     pub fn get_articles(&self) -> &Vec<Article> {
-        dbg!(&self.articles);
         &self.articles
     }
 }
